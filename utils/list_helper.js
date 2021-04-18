@@ -49,7 +49,6 @@ const mostLikes = (blogs) => {
   for (let blog of blogs) {
     blogCounter[blog.author] = (blogCounter[blog.author] || 0) + blog.likes
   }
-  console.log('counter', blogCounter)
 
   let mostLikes = {}
   let tempHighestNb = 0
@@ -61,7 +60,6 @@ const mostLikes = (blogs) => {
       tempHighestNb = mostLikes.likes 
     }
   }
-  console.log('mostLikes', mostLikes)
   return mostLikes
 }
 
