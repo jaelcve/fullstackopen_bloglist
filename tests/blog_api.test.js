@@ -2,10 +2,32 @@ const mongoose = require('mongoose')
 const supertest = require('supertest')
 const helper = require('./test_helper')
 const app = require('../app')
+const bcrypt = require('bcrypt')
 
 const api = supertest(app)
 
 const Blog = require('../models/blog')
+const User = require('../models/user')
+
+let token
+
+beforeAll(async () => {
+  await User.deleteMany({})
+
+  const passwordHash = await bcrypt.hash('secrett', 10)
+  const user = new User({ username: 'root', passwordHash })
+
+  await user.save()
+
+  const userLogin = await api
+    .post('/api/login')
+    .send({
+      username: 'root',
+      password: 'secrett'
+    })
+
+  token = userLogin.body.token
+})
 
 beforeEach(async () => {
   await Blog.deleteMany({})
@@ -52,6 +74,7 @@ describe('adding a new blog', () => {
 
     await api
       .post('/api/blogs')
+      .set('Authorization', 'Bearer ' + token)
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
@@ -63,6 +86,25 @@ describe('adding a new blog', () => {
     expect(titles).toContain('Type wars')
   })
 
+  test('a blog cannot be added without authorization', async () => {
+    const newBlog = {
+      title: 'Type wars',
+      author: 'Robert C. Martin',
+      url: 'http://blog.cleancoder.com/uncle-bob/2016/05/01/TypeWars.html',
+      likes: 2,
+    }
+
+    await api
+      .post('/api/blogs')
+      .send(newBlog)
+      .expect(401)
+
+    const blogsAtEnd = await helper.blogsInDb()
+    expect(blogsAtEnd).toHaveLength(helper.initialBlogs.length )
+
+  })
+
+
   test('if likes is missing when adding a blog, return the value of 0', async () => {
     const newBlog = {
       title: 'Super Type Wars 2',
@@ -72,6 +114,7 @@ describe('adding a new blog', () => {
 
     const response = await api
       .post('/api/blogs')
+      .set('Authorization', 'Bearer ' + token)
       .send(newBlog)
       .expect(201)
       .expect('Content-Type', /application\/json/)
@@ -86,6 +129,7 @@ describe('adding a new blog', () => {
 
     const response = await api
       .post('/api/blogs')
+      .set('Authorization', 'Bearer ' + token)
       .send(newBlog)
 
     expect(response.status).toEqual(400)
@@ -93,17 +137,31 @@ describe('adding a new blog', () => {
 })
 
 test('a blog can be deleted', async () => {
+
+  const newBlog = {
+    title: 'Type wars',
+    author: 'Robert C. Martin',
+    url: 'http://blog.cleancoder.com/uncle-bob/2016/05/01/TypeWars.html',
+    likes: 2,
+  }
+
+  await api
+    .post('/api/blogs')
+    .set('Authorization', 'Bearer ' + token)
+    .send(newBlog)
+  
   const blogsAtStart = await helper.blogsInDb()
-  const blogToDelete = blogsAtStart[0]
+  const blogToDelete = blogsAtStart[2]
 
   await api
     .delete(`/api/blogs/${blogToDelete.id}`)
+    .set('Authorization', 'Bearer ' + token)
     .expect(204)
 
   const blogsAtEnd = await helper.blogsInDb()
 
   expect(blogsAtEnd).toHaveLength(
-    helper.initialBlogs.length - 1
+    helper.initialBlogs.length 
   )
 
   const titles = blogsAtEnd.map(r => r.title)
@@ -114,7 +172,7 @@ test('a blog can be deleted', async () => {
 test('a blog can be updated', async () => {
   const blogsAtStart = await helper.blogsInDb()
 
-  const blog =  {
+  const blog = {
     title: 'Go To Statement Considered Harmful',
     author: 'Edsger W. Dijkstra',
     url: 'http://www.u.arizona.edu/~rubinson/copyright_violations/Go_To_Considered_Harmful.html',
@@ -125,7 +183,7 @@ test('a blog can be updated', async () => {
     .put(`/api/blogs/${blogsAtStart[0].id}`)
     .send(blog)
 
-  expect(response.body.likes).toEqual(22)  
+  expect(response.body.likes).toEqual(22)
 })
 
 
